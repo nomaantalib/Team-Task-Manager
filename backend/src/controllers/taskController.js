@@ -15,7 +15,7 @@ exports.createTask = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    if (!projectRecord.members.includes(req.user.id) && projectRecord.owner.toString() !== req.user.id) {
+    if (!projectRecord.members.some(id => id.toString() === req.user.id) && projectRecord.owner.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Not authorized to add tasks to this project' });
     }
 
@@ -31,23 +31,32 @@ exports.createTask = async (req, res) => {
 
     // If AI Mode is enabled, enrich the task data via Gemini AI
     if (aiMode) {
-      // Fetch existing tasks in the project to feed into workload analysis
-      const existingProjectTasks = await Task.find({ project, status: { $ne: 'completed' } });
-      
-      try {
-        console.log(`Enriching task "${title}" with Gemini AI Smart Mode...`);
-        const aiAnalysis = await geminiService.analyzeAndScheduleTask(taskData, existingProjectTasks);
+      if (req.body.generatedSubtasks && Array.isArray(req.body.generatedSubtasks) && req.body.generatedSubtasks.length > 0) {
+        taskData.priority = req.body.priority || priority || 'medium';
+        taskData.estimatedHours = Number(req.body.estimatedHours) || 8;
+        taskData.riskLevel = req.body.riskLevel || 'Low';
+        taskData.feasibilityScore = Number(req.body.feasibilityScore) || 90;
+        taskData.aiRecommendation = req.body.aiRecommendation || 'Task scheduled successfully.';
+        taskData.generatedSubtasks = req.body.generatedSubtasks;
+      } else {
+        // Fetch existing tasks in the project to feed into workload analysis
+        const existingProjectTasks = await Task.find({ project, status: { $ne: 'completed' } });
         
-        taskData.priority = aiAnalysis.priority;
-        taskData.estimatedHours = aiAnalysis.estimatedHours;
-        taskData.riskLevel = aiAnalysis.riskLevel;
-        taskData.feasibilityScore = aiAnalysis.feasibilityScore;
-        taskData.aiRecommendation = aiAnalysis.aiRecommendation;
-        taskData.generatedSubtasks = aiAnalysis.suggestedSubtasks;
-      } catch (aiError) {
-        console.error('Gemini enrichment failed. Creating with defaults. Error:', aiError.message);
-        // Fail gracefully
-        taskData.aiRecommendation = 'AI analysis was temporarily unavailable. Task created with manual inputs.';
+        try {
+          console.log(`Enriching task "${title}" with Gemini AI Smart Mode...`);
+          const aiAnalysis = await geminiService.analyzeAndScheduleTask(taskData, existingProjectTasks);
+          
+          taskData.priority = aiAnalysis.priority;
+          taskData.estimatedHours = aiAnalysis.estimatedHours;
+          taskData.riskLevel = aiAnalysis.riskLevel;
+          taskData.feasibilityScore = aiAnalysis.feasibilityScore;
+          taskData.aiRecommendation = aiAnalysis.aiRecommendation;
+          taskData.generatedSubtasks = aiAnalysis.suggestedSubtasks;
+        } catch (aiError) {
+          console.error('Gemini enrichment failed. Creating with defaults. Error:', aiError.message);
+          // Fail gracefully
+          taskData.aiRecommendation = 'AI analysis was temporarily unavailable. Task created with manual inputs.';
+        }
       }
     }
 
@@ -77,7 +86,7 @@ exports.getTasks = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Project not found' });
     }
 
-    if (!project.members.includes(req.user.id) && project.owner.toString() !== req.user.id) {
+    if (!project.members.some(id => id.toString() === req.user.id) && project.owner.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Not authorized to view tasks in this project' });
     }
 
@@ -107,7 +116,7 @@ exports.updateTask = async (req, res) => {
 
     // Verify user belongs to the project
     const project = await Project.findById(task.project);
-    if (!project.members.includes(req.user.id) && project.owner.toString() !== req.user.id) {
+    if (!project.members.some(id => id.toString() === req.user.id) && project.owner.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Not authorized to modify tasks in this project' });
     }
 

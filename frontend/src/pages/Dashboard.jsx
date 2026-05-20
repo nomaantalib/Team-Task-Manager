@@ -33,6 +33,8 @@ const Dashboard = () => {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [isEditingProjectName, setIsEditingProjectName] = useState(false);
+  const [editingProjectNameValue, setEditingProjectNameValue] = useState('');
   
   // Traditional Task Form States
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -76,6 +78,31 @@ const Dashboard = () => {
       if (data.projects.length > 0 && !selectedProject) {
         setSelectedProject(data.projects[0]);
       }
+    }
+  };
+
+  const handleStartEditProjectName = () => {
+    if (!selectedProject) return;
+    setEditingProjectNameValue(selectedProject.name);
+    setIsEditingProjectName(true);
+  };
+
+  const handleSaveProjectName = async (e) => {
+    e.preventDefault();
+    if (!editingProjectNameValue.trim() || !selectedProject) return;
+
+    const data = await authenticatedFetch(`/projects/${selectedProject._id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: editingProjectNameValue }),
+    });
+
+    if (data.success) {
+      const updatedProj = data.project;
+      setSelectedProject(updatedProj);
+      setProjects(projects.map(p => p._id === updatedProj._id ? updatedProj : p));
+      setIsEditingProjectName(false);
+    } else {
+      alert(data.message || 'Failed to update workspace name.');
     }
   };
 
@@ -211,6 +238,11 @@ const Dashboard = () => {
         dueDate: parsedTaskData.dueDate,
         priority: parsedTaskData.priority,
         aiMode: true, // Force AI Mode enabled
+        estimatedHours: parsedTaskData.estimatedHours,
+        riskLevel: parsedTaskData.riskLevel,
+        feasibilityScore: parsedTaskData.feasibilityScore,
+        aiRecommendation: parsedTaskData.aiRecommendation,
+        generatedSubtasks: parsedTaskData.generatedSubtasks,
       }),
     });
 
@@ -332,7 +364,7 @@ const Dashboard = () => {
             onClick={() => setActiveTab('board')}
             className={`sidebar-item ${activeTab === 'board' ? 'active' : ''} ${aiMode ? 'ai-active' : ''}`}
           >
-            <Layout size={18} /> Kanban Board
+            <Layout size={18} /> {selectedProject ? `${selectedProject.name} Board` : 'Team Board'}
           </li>
           {user.role === 'admin' && (
             <li 
@@ -355,8 +387,49 @@ const Dashboard = () => {
         {/* Selected Project Details Info panel */}
         {selectedProject && (
           <div style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'rgba(255,255,255,0.01)' }}>
-            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Selected Project</span>
-            <h4 style={{ color: 'white', marginTop: '4px', fontSize: '0.95rem' }}>{selectedProject.name}</h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Team Workspace</span>
+              {(selectedProject.owner?._id === user._id || selectedProject.owner === user._id || user.role === 'admin') && (
+                <button 
+                  onClick={handleStartEditProjectName}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--secondary)',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    fontWeight: 'bold',
+                    padding: '0 4px',
+                    opacity: 0.8
+                  }}
+                  onMouseOver={(e) => e.target.style.opacity = 1}
+                  onMouseOut={(e) => e.target.style.opacity = 0.8}
+                >
+                  Edit Name
+                </button>
+              )}
+            </div>
+            
+            {isEditingProjectName ? (
+              <form onSubmit={handleSaveProjectName} style={{ marginTop: '6px' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editingProjectNameValue}
+                  onChange={(e) => setEditingProjectNameValue(e.target.value)}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: '0.85rem',
+                    background: 'rgba(0,0,0,0.2)',
+                    borderColor: 'var(--secondary)'
+                  }}
+                  autoFocus
+                  onBlur={() => setTimeout(() => setIsEditingProjectName(false), 200)}
+                />
+              </form>
+            ) : (
+              <h4 style={{ color: 'white', marginTop: '4px', fontSize: '0.95rem' }}>{selectedProject.name}</h4>
+            )}
             <div style={{ marginTop: '12px', maxHeight: '120px', overflowY: 'auto' }}>
               <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Members ({selectedProject.members?.length || 0})</span>
               {selectedProject.members?.map(m => (
@@ -408,7 +481,7 @@ const Dashboard = () => {
           <div>
             <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Welcome back, {user.name}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
-              <h2 style={{ color: 'white', fontSize: '1.8rem' }}>Workspace Hub</h2>
+              <h2 style={{ color: 'white', fontSize: '1.8rem' }}>{selectedProject ? selectedProject.name : 'Workspace Hub'}</h2>
               
               {/* Project select selector */}
               {projects.length > 0 && (

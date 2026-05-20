@@ -17,7 +17,7 @@ exports.createProject = async (req, res) => {
     });
 
     // Automatically make the owner a member if not already
-    if (!project.members.includes(req.user.id)) {
+    if (!project.members.some(id => id.toString() === req.user.id)) {
       project.members.push(req.user.id);
       await project.save();
     }
@@ -83,7 +83,7 @@ exports.addMember = async (req, res) => {
     }
 
     // Check if user is already a member
-    if (project.members.includes(memberToAdd._id)) {
+    if (project.members.some(id => id.toString() === memberToAdd._id.toString())) {
       return res.status(400).json({ success: false, message: 'User is already a project member' });
     }
 
@@ -101,5 +101,41 @@ exports.addMember = async (req, res) => {
   } catch (error) {
     console.error('Add Member Error:', error.message);
     res.status(500).json({ success: false, message: 'Server Error adding member' });
+  }
+};
+
+// @desc    Update a project
+// @route   PUT /api/projects/:id
+// @access  Private
+exports.updateProject = async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    let project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+
+    // Access control: only project owner or Admin can update project
+    if (project.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized to update project' });
+    }
+
+    if (name) project.name = name;
+    if (description !== undefined) project.description = description;
+
+    await project.save();
+
+    const updatedProject = await Project.findById(project._id)
+      .populate('owner', 'name email role')
+      .populate('members', 'name email role');
+
+    res.json({
+      success: true,
+      project: updatedProject,
+    });
+  } catch (error) {
+    console.error('Update Project Error:', error.message);
+    res.status(500).json({ success: false, message: 'Server Error updating project' });
   }
 };
