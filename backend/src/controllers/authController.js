@@ -44,7 +44,14 @@ exports.register = async (req, res) => {
       res.status(400).json({ success: false, message: 'Invalid user data' });
     }
   } catch (error) {
-    console.error('Register Error:', error.message);
+    console.error('Register Error:', error);
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({ success: false, message: messages.join(', ') });
+    }
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, message: 'Email address is already in use' });
+    }
     res.status(500).json({ success: false, message: 'Server Error during registration' });
   }
 };
@@ -84,7 +91,11 @@ exports.login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Login Error:', error.message);
+    console.error('Login Error:', error);
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({ success: false, message: messages.join(', ') });
+    }
     res.status(500).json({ success: false, message: 'Server Error during login' });
   }
 };
