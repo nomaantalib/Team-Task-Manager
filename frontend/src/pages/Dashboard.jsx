@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Bot,
   Calendar,
+  Edit,
   Layout,
   Loader,
   LogOut,
@@ -51,6 +52,23 @@ const Dashboard = () => {
   const [nlpParsing, setNlpParsing] = useState(false);
   const [parsedTaskData, setParsedTaskData] = useState(null);
   const [showNlpPreview, setShowNlpPreview] = useState(false);
+
+  // Edit Task Form States
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editAssignee, setEditAssignee] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editPriority, setEditPriority] = useState('medium');
+  const [editStatus, setEditStatus] = useState('todo');
+  const [editProject, setEditProject] = useState('');
+  const [editEstimatedHours, setEditEstimatedHours] = useState(8);
+  const [editRiskLevel, setEditRiskLevel] = useState('Low');
+  const [editFeasibilityScore, setEditFeasibilityScore] = useState(90);
+  const [editAiRecommendation, setEditAiRecommendation] = useState('');
+  const [editAiMode, setEditAiMode] = useState(false);
+  const [updatingTask, setUpdatingTask] = useState(false);
 
   // Load baseline projects and users list
   useEffect(() => {
@@ -311,6 +329,76 @@ const Dashboard = () => {
     }
   };
 
+  // Open Edit Task Modal with populated values
+  const handleOpenEditModal = (task) => {
+    setEditingTask(task);
+    setEditTitle(task.title || '');
+    setEditDesc(task.description || '');
+    setEditAssignee(task.assignedTo ? (task.assignedTo._id || task.assignedTo) : '');
+    setEditDueDate(task.dueDate ? new Date(task.dueDate).toISOString().substr(0, 10) : '');
+    setEditPriority(task.priority || 'medium');
+    setEditStatus(task.status || 'todo');
+    setEditProject(task.project ? (task.project._id || task.project) : (selectedProject ? selectedProject._id : ''));
+    setEditEstimatedHours(task.estimatedHours !== undefined ? task.estimatedHours : 8);
+    setEditRiskLevel(task.riskLevel || 'Low');
+    setEditFeasibilityScore(task.feasibilityScore !== undefined ? task.feasibilityScore : 90);
+    setEditAiRecommendation(task.aiRecommendation || '');
+    setEditAiMode(task.aiMode || false);
+    setShowEditModal(true);
+  };
+
+  // Submit Task Updates
+  const handleUpdateTask = async (e) => {
+    e.preventDefault();
+    if (!editTitle.trim()) return alert('Task title is required');
+
+    setUpdatingTask(true);
+    try {
+      const payload = {
+        title: editTitle,
+        description: editDesc,
+        assignedTo: editAssignee || '',
+        dueDate: editDueDate || '',
+        priority: editPriority,
+        status: editStatus,
+        project: editProject,
+        estimatedHours: Number(editEstimatedHours),
+        riskLevel: editRiskLevel,
+        feasibilityScore: Number(editFeasibilityScore),
+        aiRecommendation: editAiRecommendation,
+        aiMode: editAiMode,
+      };
+
+      const data = await authenticatedFetch(`/tasks/${editingTask._id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+
+      if (data.success) {
+        // If the task's project ID is changed (moved to another team workspace)
+        const currentProjId = selectedProject ? selectedProject._id : '';
+        const targetProjId = editProject;
+        
+        if (targetProjId && currentProjId && targetProjId !== currentProjId) {
+          // Task moved to another project, filter out of current view
+          setTasks(tasks.filter(t => t._id !== data.task._id));
+        } else {
+          // Task stayed in same project, update in current list
+          setTasks(tasks.map(t => t._id === data.task._id ? data.task : t));
+        }
+        setShowEditModal(false);
+        setEditingTask(null);
+      } else {
+        alert(data.message || 'Failed to update task');
+      }
+    } catch (err) {
+      console.error('Error updating task:', err);
+      alert('An error occurred while updating the task');
+    } finally {
+      setUpdatingTask(false);
+    }
+  };
+
   // Compile Recharts workload chart data
   const getWorkloadChartData = () => {
     if (!selectedProject || tasks.length === 0) return [];
@@ -344,6 +432,7 @@ const Dashboard = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'No due date';
     const d = new Date(dateString);
+    if (isNaN(d.getTime())) return 'No due date';
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
@@ -972,6 +1061,244 @@ const Dashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Edit Task Modal */}
+      {showEditModal && editingTask && (
+        <div className="modal-overlay">
+          <div 
+            className="glass-panel modal-content" 
+            style={{ 
+              border: editAiMode ? '1px solid var(--secondary)' : '1px solid var(--border)',
+              maxWidth: '650px',
+              width: '90%',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
+            <div className="modal-header" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '14px', marginBottom: '20px' }}>
+              <h3 style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <Edit size={22} color="var(--primary)" /> Edit Task & Scheduling
+              </h3>
+              <button 
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingTask(null);
+                }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateTask}>
+              {/* Task Title */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: '600' }}>Task Title</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  required
+                />
+              </div>
+
+              {/* Grid: Team Workspace & Assignee */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: '600' }}>Team Workspace</label>
+                  <select 
+                    className="form-input"
+                    value={editProject}
+                    onChange={(e) => {
+                      setEditProject(e.target.value);
+                      // Clear assignee if they aren't part of the target project
+                      setEditAssignee('');
+                    }}
+                    style={{ background: '#0F172A' }}
+                  >
+                    {projects.map(p => (
+                      <option key={p._id} value={p._id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: '600' }}>Assignee</label>
+                  <select 
+                    className="form-input"
+                    value={editAssignee}
+                    onChange={(e) => setEditAssignee(e.target.value)}
+                    style={{ background: '#0F172A' }}
+                  >
+                    <option value="">Unassigned</option>
+                    {projects.find(p => p._id === editProject)?.members?.map(m => (
+                      <option key={m._id} value={m._id}>{m.name}</option>
+                    )) || selectedProject?.members?.map(m => (
+                      <option key={m._id} value={m._id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Grid: Due Date, Priority, Status */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: '600' }}>Due Date</label>
+                  <input 
+                    type="date" 
+                    className="form-input"
+                    value={editDueDate}
+                    onChange={(e) => setEditDueDate(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: '600' }}>Priority</label>
+                  <select 
+                    className="form-input"
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(e.target.value)}
+                    style={{ background: '#0F172A' }}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: '600' }}>Status</label>
+                  <select 
+                    className="form-input"
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    style={{ background: '#0F172A' }}
+                  >
+                    <option value="todo">Todo</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: '600' }}>Description</label>
+                <textarea 
+                  className="form-input"
+                  rows={3}
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              {/* AI scheduling parameters toggle section */}
+              <div style={{ 
+                background: 'rgba(139, 92, 246, 0.04)',
+                padding: '16px',
+                borderRadius: '12px',
+                border: '1px solid rgba(139, 92, 246, 0.15)',
+                marginBottom: '24px',
+                marginTop: '20px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifycontent: 'space-between', marginBottom: '14px' }}>
+                  <div>
+                    <h4 style={{ fontSize: '0.9rem', color: 'white', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
+                      <Bot size={18} color="var(--secondary)" /> AI Scheduling Parameters
+                    </h4>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                      Configure custom scheduling weight attributes, risk, and feasibility metrics.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditAiMode(!editAiMode)}
+                    className={`btn ${editAiMode ? 'btn-ai' : 'btn-secondary'}`}
+                    style={{ padding: '6px 14px', fontSize: '0.75rem', minWidth: '90px' }}
+                  >
+                    {editAiMode ? 'AI Active' : 'Manual AI'}
+                  </button>
+                </div>
+
+                {/* Edit Scheduling Fields Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Estimated Hours</label>
+                    <input 
+                      type="number" 
+                      className="form-input"
+                      value={editEstimatedHours}
+                      onChange={(e) => setEditEstimatedHours(e.target.value)}
+                      min="0"
+                      style={{ padding: '8px' }}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Risk Level</label>
+                    <select 
+                      className="form-input"
+                      value={editRiskLevel}
+                      onChange={(e) => setEditRiskLevel(e.target.value)}
+                      style={{ background: '#0F172A', padding: '8px' }}
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Feasibility Score ({editFeasibilityScore}%)</label>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="100" 
+                      className="form-input"
+                      value={editFeasibilityScore}
+                      onChange={(e) => setEditFeasibilityScore(e.target.value)}
+                      style={{ padding: '8px', cursor: 'pointer', background: 'transparent' }}
+                    />
+                  </div>
+                </div>
+
+                {/* AI Recommendation text */}
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem' }}>AI Recommendation Advice</label>
+                  <textarea 
+                    className="form-input"
+                    rows={2}
+                    value={editAiRecommendation}
+                    onChange={(e) => setEditAiRecommendation(e.target.value)}
+                    placeholder="Enter manual override recommendations or comments..."
+                    style={{ resize: 'vertical', fontSize: '0.8rem', padding: '8px' }}
+                  />
+                </div>
+              </div>
+
+              {/* Submit Buttons */}
+              <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingTask(null);
+                  }} 
+                  className="btn btn-secondary" 
+                  style={{ flexGrow: 1, padding: '10px' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className={`btn ${editAiMode ? 'btn-ai' : 'btn-primary'}`} 
+                  style={{ flexGrow: 2, padding: '10px' }}
+                  disabled={updatingTask}
+                >
+                  {updatingTask ? 'Saving changes...' : 'Save Task & Updates'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -1008,7 +1335,15 @@ const Dashboard = () => {
               <Bot size={16} />
             </button>
             <button 
+              onClick={() => handleOpenEditModal(task)}
+              title="Edit Task Details & Scheduling"
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+            >
+              <Edit size={15} />
+            </button>
+            <button 
               onClick={() => handleDeleteTask(task._id)}
+              title="Delete Task"
               style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.2)', cursor: 'pointer' }}
             >
               <Trash2 size={16} />

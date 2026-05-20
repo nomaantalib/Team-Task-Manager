@@ -120,7 +120,21 @@ exports.updateTask = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized to modify tasks in this project' });
     }
 
-    const { title, description, assignedTo, status, dueDate, priority, aiMode, generatedSubtasks } = req.body;
+    const {
+      title,
+      description,
+      assignedTo,
+      status,
+      dueDate,
+      priority,
+      aiMode,
+      generatedSubtasks,
+      estimatedHours,
+      riskLevel,
+      feasibilityScore,
+      aiRecommendation,
+      project: targetProjectId
+    } = req.body;
 
     // If AI Mode was toggled on and wasn't active before, let's run AI scheduling!
     const runAiEnrichment = aiMode === true && task.aiMode === false;
@@ -134,7 +148,24 @@ exports.updateTask = async (req, res) => {
       priority: priority !== undefined ? priority : task.priority,
       aiMode: aiMode !== undefined ? aiMode : task.aiMode,
       generatedSubtasks: generatedSubtasks !== undefined ? generatedSubtasks : task.generatedSubtasks,
+      estimatedHours: estimatedHours !== undefined ? estimatedHours : task.estimatedHours,
+      riskLevel: riskLevel !== undefined ? riskLevel : task.riskLevel,
+      feasibilityScore: feasibilityScore !== undefined ? feasibilityScore : task.feasibilityScore,
+      aiRecommendation: aiRecommendation !== undefined ? aiRecommendation : task.aiRecommendation,
     };
+
+    // Safely support moving the task to another team project workspace if permitted
+    if (targetProjectId !== undefined && targetProjectId !== '' && targetProjectId.toString() !== task.project.toString()) {
+      const targetProject = await Project.findById(targetProjectId);
+      if (!targetProject) {
+        return res.status(404).json({ success: false, message: 'Target project not found' });
+      }
+      if (!targetProject.members.some(id => id.toString() === req.user.id) && targetProject.owner.toString() !== req.user.id) {
+        return res.status(403).json({ success: false, message: 'Not authorized to move tasks to this project' });
+      }
+      updateFields.project = targetProjectId;
+    }
+
 
     if (runAiEnrichment) {
       const existingProjectTasks = await Task.find({ project: task.project, _id: { $ne: task._id }, status: { $ne: 'completed' } });
