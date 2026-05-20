@@ -2,6 +2,11 @@
 
 ### 🌐 Live Demo: [https://team-task-manager-m34e.onrender.com/](https://team-task-manager-m34e.onrender.com/)
 
+### 🎥 Demo Video
+📹 Watch Full Demonstration
+[▶ Watch Demo Video](https://drive.google.com/file/d/10SmX3yABYDQSk-Fej4idR6DvYHQjIKw_/view?usp=drivesdk)
+
+
 An **AI-Assisted Productivity & Team Collaboration Platform** that elevates traditional task coordination into a smart, self-optimizing work engine. Built using the **MERN Stack** (MongoDB, Express, React, Node.js) and powered by **Google Gemini 1.5 Flash**.
 
 ---
