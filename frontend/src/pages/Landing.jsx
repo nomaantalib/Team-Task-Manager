@@ -1,5 +1,4 @@
-import React from 'react';
-import { ArrowRight, Bot, Zap, Clock, Users, CheckCircle, BarChart2 } from 'lucide-react';
+import { ArrowRight, Bot, CheckCircle, Clock, Users, Zap } from 'lucide-react';
 
 const Landing = ({ onStart }) => {
   return (
@@ -51,7 +50,7 @@ const Landing = ({ onStart }) => {
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             fontFamily: 'var(--font-header)'
-          }}>⚡ Antigravity AI</span>
+          }}>Task Manager</span>
         </div>
         <button onClick={onStart} className="btn btn-secondary">
           Sign In
@@ -244,7 +243,7 @@ const Landing = ({ onStart }) => {
 
       {/* Footer */}
       <footer style={{ borderTop: '1px solid var(--border)', padding: '32px 24px', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', zIndex: 10 }}>
-        © {new Date().getFullYear()} Antigravity AI Project Manager. Powered by Google Gemini. All rights reserved.
+        © {new Date().getFullYear()} Task Manager. Powered by Google Gemini. All rights reserved.
       </footer>
     </div>
   );

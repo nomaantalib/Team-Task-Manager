@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { ArrowRight, Lock, Mail, Shield, User } from 'lucide-react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, User, Shield, ArrowRight } from 'lucide-react';
 
 const Auth = ({ onAuthSuccess, onBackToLanding }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -71,7 +71,7 @@ const Auth = ({ onAuthSuccess, onBackToLanding }) => {
 
         <div className="auth-header">
           <div className="auth-logo">
-            <span>⚡ Antigravity AI</span>
+            <span>Task Manager</span>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
             {isLogin 

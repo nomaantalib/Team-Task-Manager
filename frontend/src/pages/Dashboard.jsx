@@ -1,10 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { 
-  Bot, Zap, Play, Calendar, User, UserPlus, LogOut, CheckSquare, Plus, 
-  Trash2, AlertTriangle, CheckCircle, BarChart2, PlusCircle, Layout, Sparkles, Loader
+import {
+  AlertTriangle,
+  Bot,
+  Calendar,
+  Layout,
+  Loader,
+  LogOut,
+  Plus,
+  PlusCircle,
+  Sparkles,
+  Trash2,
+  UserPlus,
+  Zap
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { useEffect, useState } from 'react';
+import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useAuth } from '../context/AuthContext';
 
 const Dashboard = () => {
   const { user, logout, authenticatedFetch } = useAuth();
@@ -315,7 +325,7 @@ const Dashboard = () => {
       {/* Sidebar navigation */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <span>⚡ Antigravity AI</span>
+          <span>Task Manager</span>
         </div>
         <ul className="sidebar-menu">
           <li 
