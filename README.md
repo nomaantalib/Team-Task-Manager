@@ -1,4 +1,4 @@
-# AI — Team Task Manager ⚡
+# AI — Team Task Manager 📝
 
 ### 🌐 Live Demo: [https://team-task-manager-m34e.onrender.com/](https://team-task-manager-m34e.onrender.com/)
 
