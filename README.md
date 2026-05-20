@@ -1,4 +1,4 @@
-# Antigravity AI — Team Task Manager ⚡
+# AI — Team Task Manager ⚡
 
 An **AI-Assisted Productivity & Team Collaboration Platform** that elevates traditional task coordination into a smart, self-optimizing work engine. Built using the **MERN Stack** (MongoDB, Express, React, Node.js) and powered by **Google Gemini 1.5 Flash**.
 
