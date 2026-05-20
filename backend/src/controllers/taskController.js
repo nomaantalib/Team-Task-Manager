@@ -19,12 +19,20 @@ exports.createTask = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized to add tasks to this project' });
     }
 
+    let cleanDueDate = null;
+    if (dueDate) {
+      const parsedDate = new Date(dueDate);
+      if (!isNaN(parsedDate.getTime())) {
+        cleanDueDate = parsedDate;
+      }
+    }
+
     let taskData = {
       title,
       description,
       project,
       assignedTo: assignedTo || null,
-      dueDate: dueDate || null,
+      dueDate: cleanDueDate,
       priority: priority || 'medium',
       aiMode: aiMode || false,
     };
@@ -139,12 +147,26 @@ exports.updateTask = async (req, res) => {
     // If AI Mode was toggled on and wasn't active before, let's run AI scheduling!
     const runAiEnrichment = aiMode === true && task.aiMode === false;
 
+    let cleanUpdateDueDate = task.dueDate;
+    if (dueDate !== undefined) {
+      if (dueDate === '' || dueDate === null) {
+        cleanUpdateDueDate = null;
+      } else {
+        const parsedDate = new Date(dueDate);
+        if (!isNaN(parsedDate.getTime())) {
+          cleanUpdateDueDate = parsedDate;
+        } else {
+          cleanUpdateDueDate = null;
+        }
+      }
+    }
+
     let updateFields = {
       title: title !== undefined ? title : task.title,
       description: description !== undefined ? description : task.description,
       assignedTo: assignedTo !== undefined ? (assignedTo === '' ? null : assignedTo) : task.assignedTo,
       status: status !== undefined ? status : task.status,
-      dueDate: dueDate !== undefined ? (dueDate === '' ? null : dueDate) : task.dueDate,
+      dueDate: cleanUpdateDueDate,
       priority: priority !== undefined ? priority : task.priority,
       aiMode: aiMode !== undefined ? aiMode : task.aiMode,
       generatedSubtasks: generatedSubtasks !== undefined ? generatedSubtasks : task.generatedSubtasks,
