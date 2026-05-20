@@ -1,5 +1,7 @@
 # AI — Team Task Manager ⚡
 
+### 🌐 Live Demo: [https://team-task-manager-m34e.onrender.com/](https://team-task-manager-m34e.onrender.com/)
+
 An **AI-Assisted Productivity & Team Collaboration Platform** that elevates traditional task coordination into a smart, self-optimizing work engine. Built using the **MERN Stack** (MongoDB, Express, React, Node.js) and powered by **Google Gemini 1.5 Flash**.
 
 ---
