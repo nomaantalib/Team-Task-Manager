@@ -124,6 +124,9 @@ exports.updateTask = async (req, res) => {
 
     // Verify user belongs to the project
     const project = await Project.findById(task.project);
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Task project not found' });
+    }
     if (!project.members.some(id => id.toString() === req.user.id) && project.owner.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Not authorized to modify tasks in this project' });
     }

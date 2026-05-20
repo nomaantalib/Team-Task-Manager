@@ -112,10 +112,24 @@ export const AuthProvider = ({ children }) => {
         ...options,
         headers,
       });
-      return await res.json();
+
+      const data = await res.json();
+
+      // If token expired or invalid, auto-logout
+      if (res.status === 401) {
+        console.warn(`Auth expired on ${endpoint}. Logging out.`);
+        logout();
+        return { success: false, message: 'Session expired. Please log in again.' };
+      }
+
+      if (!res.ok && !data.success) {
+        console.error(`API error on ${endpoint}:`, res.status, data);
+      }
+
+      return data;
     } catch (err) {
-      console.error(`API Call failed on ${endpoint}:`, err);
-      return { success: false, message: 'Network connection failed' };
+      console.error(`API Call failed on ${endpoint}:`, err.message, err);
+      return { success: false, message: `Request failed: ${err.message}` };
     }
   };
 

@@ -188,37 +188,51 @@ const Dashboard = () => {
   // Standard Task Creation (handles manual + AI-scheduled modes)
   const handleCreateTask = async (e) => {
     e.preventDefault();
-    if (!taskTitle.trim() || !selectedProject) return;
-    setCreatingTask(true);
-
-    const data = await authenticatedFetch('/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: taskTitle,
-        description: taskDesc,
-        project: selectedProject._id,
-        assignedTo: taskAssignee || undefined,
-        dueDate: taskDueDate || undefined,
-        priority: taskPriority,
-        aiMode: formAiMode,
-      }),
-    });
-
-    if (data.success) {
-      setTasks([...tasks, data.task]);
-      setShowTaskModal(false);
-      
-      // Reset form fields
-      setTaskTitle('');
-      setTaskDesc('');
-      setTaskAssignee('');
-      setTaskDueDate('');
-      setTaskPriority('medium');
-      setFormAiMode(false);
-    } else {
-      alert(data.message || 'Failed to create task.');
+    if (!taskTitle.trim()) {
+      alert('Please enter a task title.');
+      return;
     }
-    setCreatingTask(false);
+    if (!selectedProject) {
+      alert('Please select or create a project workspace first.');
+      return;
+    }
+    setCreatingTask(true);
+    try {
+      const data = await authenticatedFetch('/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: taskTitle,
+          description: taskDesc,
+          project: selectedProject._id,
+          assignedTo: taskAssignee || null,
+          dueDate: taskDueDate || null,
+          priority: taskPriority,
+          aiMode: formAiMode,
+        }),
+      });
+
+      console.log('Create task response:', data);
+
+      if (data.success) {
+        setTasks(prev => [...prev, data.task]);
+        setShowTaskModal(false);
+        // Reset form fields
+        setTaskTitle('');
+        setTaskDesc('');
+        setTaskAssignee('');
+        setTaskDueDate('');
+        setTaskPriority('medium');
+        setFormAiMode(false);
+      } else {
+        console.error('Create task failed:', data);
+        alert(data.message || 'Failed to create task. Please try again.');
+      }
+    } catch (err) {
+      console.error('Create task error:', err);
+      alert('Network error creating task. Please check your connection.');
+    } finally {
+      setCreatingTask(false);
+    }
   };
 
   // Handle NLP Task Parsing
@@ -243,36 +257,51 @@ const Dashboard = () => {
 
   // Accept and save NLP Parsed Task
   const handleSaveNlpTask = async () => {
-    if (!parsedTaskData || !selectedProject) return;
-    setCreatingTask(true);
-
-    // Save parsed task directly to DB
-    const data = await authenticatedFetch('/tasks', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: parsedTaskData.title,
-        description: parsedTaskData.description,
-        project: selectedProject._id,
-        dueDate: parsedTaskData.dueDate,
-        priority: parsedTaskData.priority,
-        aiMode: true, // Force AI Mode enabled
-        estimatedHours: parsedTaskData.estimatedHours,
-        riskLevel: parsedTaskData.riskLevel,
-        feasibilityScore: parsedTaskData.feasibilityScore,
-        aiRecommendation: parsedTaskData.aiRecommendation,
-        generatedSubtasks: parsedTaskData.generatedSubtasks,
-      }),
-    });
-
-    if (data.success) {
-      setTasks([...tasks, data.task]);
-      setShowNlpPreview(false);
-      setParsedTaskData(null);
-      setNlpText('');
-    } else {
-      alert('Failed to save parsed task.');
+    if (!parsedTaskData) {
+      alert('No parsed task data found. Please parse again.');
+      return;
     }
-    setCreatingTask(false);
+    if (!selectedProject) {
+      alert('Please select a project workspace before saving the task.');
+      return;
+    }
+    setCreatingTask(true);
+    try {
+      // Save parsed task directly to DB
+      const data = await authenticatedFetch('/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: parsedTaskData.title,
+          description: parsedTaskData.description,
+          project: selectedProject._id,
+          dueDate: parsedTaskData.dueDate || null,
+          priority: parsedTaskData.priority,
+          aiMode: true,
+          estimatedHours: parsedTaskData.estimatedHours,
+          riskLevel: parsedTaskData.riskLevel,
+          feasibilityScore: parsedTaskData.feasibilityScore,
+          aiRecommendation: parsedTaskData.aiRecommendation,
+          generatedSubtasks: parsedTaskData.generatedSubtasks,
+        }),
+      });
+
+      console.log('Save NLP task response:', data);
+
+      if (data.success) {
+        setTasks(prev => [...prev, data.task]);
+        setShowNlpPreview(false);
+        setParsedTaskData(null);
+        setNlpText('');
+      } else {
+        console.error('NLP task save failed:', data);
+        alert(data.message || 'Failed to save parsed task. Please try again.');
+      }
+    } catch (err) {
+      console.error('Save NLP task error:', err);
+      alert('Network error saving task. Please check your connection.');
+    } finally {
+      setCreatingTask(false);
+    }
   };
 
   // Drag-and-drop simulated column shifts
@@ -478,7 +507,7 @@ const Dashboard = () => {
           <div style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'rgba(255,255,255,0.01)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Team Workspace</span>
-              {(selectedProject.owner?._id === user._id || selectedProject.owner === user._id || user.role === 'admin') && (
+              {(selectedProject.owner?._id === user?._id || selectedProject.owner?.toString() === user?._id || user?.role === 'admin') && (
                 <button 
                   onClick={handleStartEditProjectName}
                   style={{
@@ -532,7 +561,7 @@ const Dashboard = () => {
             </div>
 
             {/* Invite Form (only for project owner/admins) */}
-            {(selectedProject.owner._id === user._id || selectedProject.owner === user._id || user.role === 'admin') && (
+            {(selectedProject.owner?._id === user?._id || selectedProject.owner?.toString() === user?._id || user?.role === 'admin') && (
               <form onSubmit={handleInviteMember} style={{ marginTop: '14px', display: 'flex', gap: '4px' }}>
                 <input 
                   type="email" 
