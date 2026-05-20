@@ -122,12 +122,25 @@ exports.updateTask = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Task not found' });
     }
 
-    // Verify user belongs to the project
+    // Verify user belongs to the project or is an admin or is the task assignee
     const project = await Project.findById(task.project);
     if (!project) {
       return res.status(404).json({ success: false, message: 'Task project not found' });
     }
-    if (!project.members.some(id => id.toString() === req.user.id) && project.owner.toString() !== req.user.id) {
+
+    const isOwner = project.owner.toString() === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    const isMember = project.members.some(m => {
+      const memberId = m._id ? m._id.toString() : m.toString();
+      return memberId === req.user.id;
+    });
+    const isAssigned = task.assignedTo && (
+      task.assignedTo._id
+        ? task.assignedTo._id.toString() === req.user.id
+        : task.assignedTo.toString() === req.user.id
+    );
+
+    if (!isOwner && !isAdmin && !isMember && !isAssigned) {
       return res.status(403).json({ success: false, message: 'Not authorized to modify tasks in this project' });
     }
 
@@ -248,9 +261,17 @@ exports.deleteTask = async (req, res) => {
 
     const isOwner = project.owner.toString() === req.user.id;
     const isAdmin = req.user.role === 'admin';
-    const isMember = project.members.some(id => id.toString() === req.user.id);
+    const isMember = project.members.some(m => {
+      const memberId = m._id ? m._id.toString() : m.toString();
+      return memberId === req.user.id;
+    });
+    const isAssigned = task.assignedTo && (
+      task.assignedTo._id
+        ? task.assignedTo._id.toString() === req.user.id
+        : task.assignedTo.toString() === req.user.id
+    );
 
-    if (!isOwner && !isAdmin && !isMember) {
+    if (!isOwner && !isAdmin && !isMember && !isAssigned) {
       return res.status(403).json({ success: false, message: 'Not authorized to delete tasks in this project' });
     }
 
