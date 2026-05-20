@@ -5,11 +5,13 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'MOCK_KEY');
 
 // Pool of free-tier Gemini models
 const MODEL_POOL = [
-  'gemini-1.5-flash',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
   'gemini-2.0-flash',
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-pro',
-  'gemini-1.0-pro'
+  'gemini-2.0-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-2.5-pro'
 ];
 
 let currentModelIndex = 0;
