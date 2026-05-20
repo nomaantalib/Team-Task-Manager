@@ -22,10 +22,14 @@ const Dashboard = () => {
   
   // App States
   const [aiMode, setAiMode] = useState(false);
-  const [activeTab, setActiveTab] = useState('board'); // board, projects, insights
+  const [activeTab, setActiveTab] = useState('board'); // board, projects, insights, scheduler
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [allTasks, setAllTasks] = useState([]);
+  const [schedulerFilterProject, setSchedulerFilterProject] = useState('');
+  const [schedulerFilterPriority, setSchedulerFilterPriority] = useState('');
+  const [loadingAllTasks, setLoadingAllTasks] = useState(false);
   const [users, setUsers] = useState([]);
   const [insights, setInsights] = useState(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
@@ -46,6 +50,15 @@ const Dashboard = () => {
   const [taskPriority, setTaskPriority] = useState('medium');
   const [formAiMode, setFormAiMode] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
+
+  // Quick Scheduler Form States
+  const [quickProject, setQuickProject] = useState('');
+  const [quickTitle, setQuickTitle] = useState('');
+  const [quickAssignee, setQuickAssignee] = useState('');
+  const [quickDueDate, setQuickDueDate] = useState('');
+  const [quickPriority, setQuickPriority] = useState('medium');
+  const [quickAiMode, setQuickAiMode] = useState(false);
+  const [schedulingQuickTask, setSchedulingQuickTask] = useState(false);
 
   // NLP Task States
   const [nlpText, setNlpText] = useState('');
@@ -70,10 +83,20 @@ const Dashboard = () => {
   const [editAiMode, setEditAiMode] = useState(false);
   const [updatingTask, setUpdatingTask] = useState(false);
 
-  // Load baseline projects and users list
+  const loadAllTasks = async () => {
+    setLoadingAllTasks(true);
+    const data = await authenticatedFetch('/tasks');
+    if (data.success) {
+      setAllTasks(data.tasks);
+    }
+    setLoadingAllTasks(false);
+  };
+
+  // Load baseline projects, users list and all tasks
   useEffect(() => {
     loadProjects();
     loadUsers();
+    loadAllTasks();
   }, []);
 
   // When selected project changes, load tasks and insights
@@ -93,8 +116,11 @@ const Dashboard = () => {
     const data = await authenticatedFetch('/projects');
     if (data.success) {
       setProjects(data.projects);
-      if (data.projects.length > 0 && !selectedProject) {
-        setSelectedProject(data.projects[0]);
+      if (data.projects.length > 0) {
+        if (!selectedProject) {
+          setSelectedProject(data.projects[0]);
+        }
+        setQuickProject(data.projects[0]._id);
       }
     }
   };
@@ -215,6 +241,7 @@ const Dashboard = () => {
 
       if (data.success) {
         setTasks(prev => [...prev, data.task]);
+        loadAllTasks();
         setShowTaskModal(false);
         // Reset form fields
         setTaskTitle('');
@@ -232,6 +259,58 @@ const Dashboard = () => {
       alert('Network error creating task. Please check your connection.');
     } finally {
       setCreatingTask(false);
+    }
+  };
+
+  // Quick Task Creation from Workspace Scheduler View
+  const handleCreateQuickTask = async (e) => {
+    e.preventDefault();
+    if (!quickTitle.trim()) {
+      alert('Please enter a task title.');
+      return;
+    }
+    if (!quickProject) {
+      alert('Please select a project/team workspace.');
+      return;
+    }
+    setSchedulingQuickTask(true);
+    try {
+      const data = await authenticatedFetch('/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: quickTitle,
+          project: quickProject,
+          assignedTo: quickAssignee || null,
+          dueDate: quickDueDate || null,
+          priority: quickPriority,
+          aiMode: quickAiMode,
+        }),
+      });
+
+      console.log('Quick task response:', data);
+
+      if (data.success) {
+        // If this is the currently selected project, also add to tasks
+        if (selectedProject && selectedProject._id === quickProject) {
+          setTasks(prev => [...prev, data.task]);
+        }
+        // Always reload all tasks
+        loadAllTasks();
+        // Reset form
+        setQuickTitle('');
+        setQuickAssignee('');
+        setQuickDueDate('');
+        setQuickPriority('medium');
+        setQuickAiMode(false);
+        alert('Task scheduled successfully across the selected team workspace!');
+      } else {
+        alert(data.message || 'Failed to schedule task.');
+      }
+    } catch (err) {
+      console.error('Quick task error:', err);
+      alert('Network error scheduling task.');
+    } finally {
+      setSchedulingQuickTask(false);
     }
   };
 
@@ -289,6 +368,7 @@ const Dashboard = () => {
 
       if (data.success) {
         setTasks(prev => [...prev, data.task]);
+        loadAllTasks();
         setShowNlpPreview(false);
         setParsedTaskData(null);
         setNlpText('');
@@ -313,6 +393,7 @@ const Dashboard = () => {
 
     if (data.success) {
       setTasks(tasks.map(t => t._id === taskId ? data.task : t));
+      loadAllTasks();
     }
   };
 
@@ -326,6 +407,7 @@ const Dashboard = () => {
 
     if (data.success) {
       setTasks(tasks.filter(t => t._id !== taskId));
+      loadAllTasks();
     }
   };
 
@@ -342,6 +424,7 @@ const Dashboard = () => {
 
     if (data.success) {
       setTasks(tasks.map(t => t._id === task._id ? data.task : t));
+      loadAllTasks();
     }
   };
 
@@ -354,6 +437,7 @@ const Dashboard = () => {
 
     if (data.success) {
       setTasks(tasks.map(t => t._id === task._id ? data.task : t));
+      loadAllTasks();
       alert(`AI Mode toggled ${!task.aiMode ? 'ON' : 'OFF'} for this task.`);
     }
   };
@@ -415,6 +499,7 @@ const Dashboard = () => {
           // Task stayed in same project, update in current list
           setTasks(tasks.map(t => t._id === data.task._id ? data.task : t));
         }
+        loadAllTasks();
         setShowEditModal(false);
         setEditingTask(null);
       } else {
@@ -483,6 +568,12 @@ const Dashboard = () => {
             className={`sidebar-item ${activeTab === 'board' ? 'active' : ''} ${aiMode ? 'ai-active' : ''}`}
           >
             <Layout size={18} /> {selectedProject ? `${selectedProject.name} Board` : 'Team Board'}
+          </li>
+          <li 
+            onClick={() => setActiveTab('scheduler')}
+            className={`sidebar-item ${activeTab === 'scheduler' ? 'active' : ''} ${aiMode ? 'ai-active' : ''}`}
+          >
+            <Calendar size={18} /> Workspace Scheduler
           </li>
           {user.role === 'admin' && (
             <li 
@@ -644,7 +735,68 @@ const Dashboard = () => {
         </header>
 
         {/* Tab Selection Outputs */}
-        {activeTab === 'board' && (
+        {activeTab === 'projects' && (
+          <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <h2 style={{ color: 'white', marginBottom: '24px' }}>Create New Project scope</h2>
+            <div className="glass-panel" style={{ padding: '32px' }}>
+              <form onSubmit={handleCreateProject}>
+                <div className="form-group">
+                  <label className="form-label">Project Scope Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. E-Commerce Website Redesign"
+                    className="form-input"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: '24px' }}>
+                  <label className="form-label">Description / Core Objective</label>
+                  <textarea 
+                    placeholder="Describe milestones, parameters, and deliverables..."
+                    className="form-input"
+                    rows={4}
+                    value={newProjectDesc}
+                    onChange={(e) => setNewProjectDesc(e.target.value)}
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px' }}>
+                  Initialize Project Scope
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {activeTab !== 'projects' && projects.length === 0 ? (
+          <div className="glass-panel" style={{ padding: '60px 40px', textAlign: 'center', maxWidth: '600px', margin: '40px auto', border: '1px solid rgba(139, 92, 246, 0.25)', boxShadow: '0 8px 32px 0 rgba(139, 92, 246, 0.12)' }}>
+            <div style={{ display: 'inline-flex', padding: '16px', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.1)', color: 'var(--secondary)', marginBottom: '24px' }}>
+              <Calendar size={48} />
+            </div>
+            <h3 style={{ fontSize: '1.6rem', color: 'white', marginBottom: '12px' }}>No Workspace Scheduled</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '32px', lineHeight: '1.6' }}>
+              {user.role === 'admin' 
+                ? "You haven't scheduled any team workspaces yet. Initialize a new project scope to set up your teams and schedule tasks."
+                : "You are not assigned to any active team workspaces yet. Once an administrator adds you to a team, your boards and tasks will populate here."}
+            </p>
+            {user.role === 'admin' ? (
+              <button 
+                onClick={() => setActiveTab('projects')} 
+                className="btn btn-ai"
+                style={{ padding: '12px 32px', borderRadius: '30px' }}
+              >
+                <Plus size={16} /> Initialize Project Scope
+              </button>
+            ) : (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                <Loader className="animate-spin" size={14} /> Waiting for team invitation...
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {activeTab === 'board' && (
           <>
             {/* Natural Language AI Magic Input (only if in AI Mode) */}
             {aiMode && (
@@ -845,39 +997,338 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Tab Selection: Project Creation (Admin Panel) */}
-        {activeTab === 'projects' && (
-          <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-            <h2 style={{ color: 'white', marginBottom: '24px' }}>Create New Project scope</h2>
-            <div className="glass-panel" style={{ padding: '32px' }}>
-              <form onSubmit={handleCreateProject}>
-                <div className="form-group">
-                  <label className="form-label">Project Scope Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. E-Commerce Website Redesign"
+        {/* Tab Selection: Workspace Scheduler (Multi-Team) */}
+        {activeTab === 'scheduler' && (
+          <div style={{ maxWidth: '1200px', margin: '0 auto', paddingBottom: '40px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div>
+                <h2 style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Calendar size={24} color="var(--secondary)" /> Workspace Scheduler
+                </h2>
+                <p style={{ color: 'var(--text-secondary)' }}>
+                  Manage, schedule and load-balance tasks across all your teams simultaneously.
+                </p>
+              </div>
+            </div>
+
+            {/* Metrics Ribbon */}
+            <div className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+              <div className="glass-panel stat-widget" style={{ padding: '16px' }}>
+                <span className="stat-label">Active Teams</span>
+                <p className="stat-val" style={{ fontSize: '1.8rem', marginTop: '4px' }}>{projects.length}</p>
+              </div>
+              <div className="glass-panel stat-widget" style={{ padding: '16px' }}>
+                <span className="stat-label">Total Tasks</span>
+                <p className="stat-val" style={{ fontSize: '1.8rem', marginTop: '4px', color: 'var(--secondary)' }}>{allTasks.length}</p>
+              </div>
+              <div className="glass-panel stat-widget" style={{ padding: '16px' }}>
+                <span className="stat-label">Pending / In-Flight</span>
+                <p className="stat-val" style={{ fontSize: '1.8rem', marginTop: '4px', color: 'var(--warning)' }}>
+                  {allTasks.filter(t => t.status !== 'completed').length}
+                </p>
+              </div>
+              <div className="glass-panel stat-widget" style={{ padding: '16px' }}>
+                <span className="stat-label">Completed Tasks</span>
+                <p className="stat-val" style={{ fontSize: '1.8rem', marginTop: '4px', color: 'var(--success)' }}>
+                  {allTasks.filter(t => t.status === 'completed').length}
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Scheduler Panel */}
+            <div className="glass-panel" style={{ padding: '24px', marginBottom: '32px', background: 'rgba(139, 92, 246, 0.02)', border: '1px solid rgba(139, 92, 246, 0.15)' }}>
+              <h3 style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem', marginBottom: '16px' }}>
+                <Sparkles size={16} color="var(--secondary)" /> Global Quick Task Scheduler
+              </h3>
+              <form onSubmit={handleCreateQuickTask} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', alignItems: 'end' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '6px' }}>Select Team Workspace</label>
+                  <select
                     className="form-input"
-                    value={newProjectName}
-                    onChange={(e) => setNewProjectName(e.target.value)}
+                    value={quickProject}
+                    onChange={(e) => {
+                      setQuickProject(e.target.value);
+                      setQuickAssignee(''); // reset assignee filter
+                    }}
+                    style={{ padding: '8px 12px', background: '#0F172A' }}
+                  >
+                    {projects.map(p => (
+                      <option key={p._id} value={p._id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '6px' }}>Task Title</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Build API integration"
+                    className="form-input"
+                    value={quickTitle}
+                    onChange={(e) => setQuickTitle(e.target.value)}
+                    style={{ padding: '8px 12px' }}
                   />
                 </div>
-                <div className="form-group" style={{ marginBottom: '24px' }}>
-                  <label className="form-label">Description / Core Objective</label>
-                  <textarea 
-                    placeholder="Describe milestones, parameters, and deliverables..."
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '6px' }}>Assignee (Optional)</label>
+                  <select
                     className="form-input"
-                    rows={4}
-                    value={newProjectDesc}
-                    onChange={(e) => setNewProjectDesc(e.target.value)}
-                    style={{ resize: 'vertical' }}
+                    value={quickAssignee}
+                    onChange={(e) => setQuickAssignee(e.target.value)}
+                    style={{ padding: '8px 12px', background: '#0F172A' }}
+                  >
+                    <option value="">Unassigned</option>
+                    {projects.find(p => p._id === quickProject)?.members?.map(m => (
+                      <option key={m._id} value={m._id}>{m.name} ({m.role})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '6px' }}>Due Date</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={quickDueDate}
+                    onChange={(e) => setQuickDueDate(e.target.value)}
+                    style={{ padding: '8px 12px' }}
                   />
                 </div>
-                <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px' }}>
-                  Initialize Project Scope
-                </button>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '6px' }}>Priority</label>
+                  <select
+                    className="form-input"
+                    value={quickPriority}
+                    onChange={(e) => setQuickPriority(e.target.value)}
+                    style={{ padding: '8px 12px', background: '#0F172A' }}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', height: '40px' }}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={schedulingQuickTask}
+                    style={{ flex: 1, padding: '8px 16px', fontSize: '0.85rem', borderRadius: '8px', height: '100%' }}
+                  >
+                    {schedulingQuickTask ? <Loader className="animate-spin" size={14} /> : 'Schedule Task'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickAiMode(!quickAiMode);
+                    }}
+                    className={`btn ${quickAiMode ? 'btn-ai' : ''}`}
+                    title="Enable AI Smart Mode Optimization"
+                    style={{
+                      background: quickAiMode ? 'var(--secondary)' : 'rgba(255,255,255,0.05)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      color: 'white',
+                      height: '100%',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Bot size={16} />
+                  </button>
+                </div>
               </form>
             </div>
+
+            {/* Timeline Filter Controls */}
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Filter Scheduler:</span>
+              <select
+                className="form-input"
+                value={schedulerFilterProject}
+                onChange={(e) => setSchedulerFilterProject(e.target.value)}
+                style={{ width: '180px', padding: '6px 12px', background: '#0F172A', margin: 0 }}
+              >
+                <option value="">All Workspaces</option>
+                {projects.map(p => (
+                  <option key={p._id} value={p._id}>{p.name}</option>
+                ))}
+              </select>
+
+              <select
+                className="form-input"
+                value={schedulerFilterPriority}
+                onChange={(e) => setSchedulerFilterPriority(e.target.value)}
+                style={{ width: '150px', padding: '6px 12px', background: '#0F172A', margin: 0 }}
+              >
+                <option value="">All Priorities</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+
+              {(schedulerFilterProject || schedulerFilterPriority) && (
+                <button
+                  onClick={() => {
+                    setSchedulerFilterProject('');
+                    setSchedulerFilterPriority('');
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--secondary)',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            {/* Sprints and Timeline Lane Grid */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+              {projects
+                .filter(p => !schedulerFilterProject || p._id === schedulerFilterProject)
+                .map(project => {
+                  const projectTasks = allTasks.filter(t => {
+                    const tProjId = t.project?._id || t.project;
+                    const matchesProj = tProjId === project._id;
+                    const matchesPriority = !schedulerFilterPriority || t.priority === schedulerFilterPriority;
+                    return matchesProj && matchesPriority;
+                  });
+
+                  const totalProjTasks = allTasks.filter(t => (t.project?._id || t.project) === project._id).length;
+                  const completedProjTasks = allTasks.filter(t => (t.project?._id || t.project) === project._id && t.status === 'completed').length;
+                  const completionRate = totalProjTasks > 0 ? Math.round((completedProjTasks / totalProjTasks) * 100) : 0;
+
+                  return (
+                    <div key={project._id} className="glass-panel" style={{ padding: '24px', position: 'relative', overflow: 'hidden' }}>
+                      {/* Left color bar matching premium design */}
+                      <div style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: '4px',
+                        background: 'linear-gradient(to bottom, var(--primary), var(--secondary))'
+                      }} />
+                      
+                      {/* Project Header Row */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '16px' }}>
+                        <div>
+                          <h3 style={{ color: 'white', fontSize: '1.2rem', margin: 0 }}>{project.name}</h3>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            Owned by {project.owner?.name || 'Unknown'} • {project.members?.length || 0} Team Members
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          {/* Progress Circle or Bar */}
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Sprints Completed</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                              <div style={{ width: '100px', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{ width: `${completionRate}%`, height: '100%', background: 'var(--success)', borderRadius: '3px' }} />
+                              </div>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 'bold' }}>{completionRate}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Timeline Cards Row */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginTop: '16px' }}>
+                        {projectTasks.length === 0 ? (
+                          <div style={{ gridColumn: '1 / -1', padding: '32px', textAlign: 'center', border: '1px dashed var(--border)', borderRadius: '8px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            No tasks scheduled in this priority/workspace lane.
+                          </div>
+                        ) : (
+                          projectTasks.map(task => {
+                            const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'completed';
+                            
+                            return (
+                              <div
+                                key={task._id}
+                                className="glass-panel"
+                                style={{
+                                  padding: '16px',
+                                  background: 'rgba(255, 255, 255, 0.01)',
+                                  borderLeft: isOverdue ? '4px solid var(--danger)' : '1px solid var(--border)',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  justifyContent: 'space-between',
+                                  gap: '12px',
+                                }}
+                              >
+                                <div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <span className={`task-tag tag-${task.priority}`} style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
+                                      {task.priority}
+                                    </span>
+                                    <span style={{
+                                      fontSize: '0.7rem',
+                                      fontWeight: 'bold',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      background: task.status === 'completed' ? 'rgba(16, 185, 129, 0.1)' : task.status === 'in_progress' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                                      color: task.status === 'completed' ? 'var(--success)' : task.status === 'in_progress' ? 'var(--warning)' : 'var(--text-secondary)'
+                                    }}>
+                                      {task.status === 'completed' ? 'Completed' : task.status === 'in_progress' ? 'In Progress' : 'Todo'}
+                                    </span>
+                                  </div>
+                                  <h4 style={{ color: 'white', fontSize: '0.95rem', margin: '0 0 6px 0', fontWeight: 600 }}>{task.title}</h4>
+                                  {task.description && (
+                                    <p style={{
+                                      fontSize: '0.78rem',
+                                      color: 'var(--text-muted)',
+                                      margin: 0,
+                                      display: '-webkit-box',
+                                      WebkitLineClamp: 2,
+                                      WebkitBoxOrient: 'vertical',
+                                      overflow: 'hidden'
+                                    }}>{task.description}</p>
+                                  )}
+                                </div>
+
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                                      Assignee: <strong>{task.assignedTo?.name || 'Unassigned'}</strong>
+                                    </span>
+                                    <span style={{ fontSize: '0.7rem', color: isOverdue ? 'var(--danger)' : 'var(--text-muted)' }}>
+                                      Due: {formatDate(task.dueDate)} {isOverdue && '⚠️'}
+                                    </span>
+                                  </div>
+                                  
+                                  {/* CRUD actions directly on scheduler timeline */}
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                      onClick={() => handleOpenEditModal(task)}
+                                      title="Edit details & capacity scheduling"
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+                                    >
+                                      <Edit size={14} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteTask(task._id)}
+                                      title="Remove from scheduling"
+                                      style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.15)', cursor: 'pointer', padding: '4px' }}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
           </div>
+        )}
+
+          </>
         )}
       </main>
 

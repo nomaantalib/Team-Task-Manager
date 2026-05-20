@@ -242,8 +242,16 @@ exports.deleteTask = async (req, res) => {
 
     // Check project permission
     const project = await Project.findById(task.project);
-    if (project.owner.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Only project owners or Admins can delete tasks' });
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+
+    const isOwner = project.owner.toString() === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    const isMember = project.members.some(id => id.toString() === req.user.id);
+
+    if (!isOwner && !isAdmin && !isMember) {
+      return res.status(403).json({ success: false, message: 'Not authorized to delete tasks in this project' });
     }
 
     await Task.findByIdAndDelete(req.params.id);
@@ -255,5 +263,33 @@ exports.deleteTask = async (req, res) => {
   } catch (error) {
     console.error('Delete Task Error:', error.message);
     res.status(500).json({ success: false, message: 'Server Error deleting task' });
+  }
+};
+
+// @desc    Get all tasks across all projects/teams the user belongs to
+// @route   GET /api/tasks
+// @access  Private
+exports.getAllUserTasks = async (req, res) => {
+  try {
+    // Find all projects where user is owner or member
+    const userProjects = await Project.find({
+      $or: [{ owner: req.user.id }, { members: req.user.id }],
+    });
+
+    const projectIds = userProjects.map(p => p._id);
+
+    // Find all tasks in these projects
+    const tasks = await Task.find({ project: { $in: projectIds } })
+      .populate('assignedTo', 'name email role')
+      .populate('project', 'name description owner')
+      .sort('dueDate');
+
+    res.json({
+      success: true,
+      tasks,
+    });
+  } catch (error) {
+    console.error('Get All User Tasks Error:', error.message);
+    res.status(500).json({ success: false, message: 'Server Error fetching all tasks' });
   }
 };
