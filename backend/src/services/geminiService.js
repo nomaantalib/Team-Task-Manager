@@ -3,6 +3,45 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 // Initialize Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'MOCK_KEY');
 
+// Pool of free-tier Gemini models
+const MODEL_POOL = [
+  'gemini-1.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-pro',
+  'gemini-1.0-pro'
+];
+
+let currentModelIndex = 0;
+
+/**
+ * Executes a generative content request with model rotation and immediate fallback.
+ * Loops through the pool of free models starting from the current rotating index,
+ * ensuring maximum rate limit utilization and fault tolerance under free-tier limits.
+ */
+const generateContentWithFallback = async (prompt) => {
+  let lastError = null;
+
+  for (let i = 0; i < MODEL_POOL.length; i++) {
+    const modelName = MODEL_POOL[(currentModelIndex + i) % MODEL_POOL.length];
+    try {
+      console.log(`[GeminiService] Attempting generation using model: ${modelName}`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      
+      // Rotate index for the next request to balance load
+      currentModelIndex = (currentModelIndex + 1) % MODEL_POOL.length;
+      return text;
+    } catch (error) {
+      console.warn(`[GeminiService] Model ${modelName} failed. Error:`, error.message || error);
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('All Gemini generative models in the pool failed.');
+};
+
 // Helper to safely parse JSON from Gemini's output
 const parseJsonResponse = (text) => {
   let cleanText = text.trim();
@@ -40,7 +79,6 @@ exports.generateDescription = async (title) => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `
       You are an expert product manager and technical writer.
       Generate a professional, concise, and highly detailed software development task description for a task titled: "${title}".
@@ -52,8 +90,8 @@ exports.generateDescription = async (title) => {
       - Return ONLY the raw description text. Do not add titles, bullet points, or markdown blocks unless necessary.
     `;
 
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    const rawText = await generateContentWithFallback(prompt);
+    return rawText.trim();
   } catch (error) {
     console.error('Gemini Generate Description Error:', error);
     return `Implement and verify the functional modules for: ${title}.`;
@@ -76,7 +114,6 @@ exports.generateSubtasks = async (title, description = '') => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `
       You are an expert software architect.
       Break down the following task into a list of 4 to 6 small, actionable, sequential subtasks (checklists).
@@ -91,8 +128,7 @@ exports.generateSubtasks = async (title, description = '') => {
       Return only JSON, no formatting, no markdown.
     `;
 
-    const result = await model.generateContent(prompt);
-    const rawText = result.response.text();
+    const rawText = await generateContentWithFallback(prompt);
     const parsedSubtaskTitles = parseJsonResponse(rawText);
     
     return parsedSubtaskTitles.map(title => ({
@@ -135,7 +171,6 @@ exports.analyzeAndScheduleTask = async (taskData, existingTasks = []) => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const formattedExisting = existingTasks.map(t => `- Title: ${t.title}, Priority: ${t.priority}, Hours: ${t.estimatedHours || 'N/A'}, Status: ${t.status}`).join('\n');
     
     const prompt = `
@@ -166,8 +201,7 @@ exports.analyzeAndScheduleTask = async (taskData, existingTasks = []) => {
       Return ONLY the raw JSON object, no markdown wrappers, no introductory comments.
     `;
 
-    const result = await model.generateContent(prompt);
-    const rawText = result.response.text();
+    const rawText = await generateContentWithFallback(prompt);
     const insights = parseJsonResponse(rawText);
     
     // Map suggestedSubtasks into the structured format [{ title, completed }]
@@ -237,7 +271,6 @@ exports.parseNaturalLanguageTask = async (text) => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const prompt = `
       You are a smart natural language processing assistant for project managers.
       Parse the following user request and convert it into a structured task parameter JSON block.
@@ -263,8 +296,7 @@ exports.parseNaturalLanguageTask = async (text) => {
       Return ONLY the raw JSON object, no markdown wrappers, no introductory comments.
     `;
 
-    const result = await model.generateContent(prompt);
-    const rawText = result.response.text();
+    const rawText = await generateContentWithFallback(prompt);
     const parsed = parseJsonResponse(rawText);
     
     const structuredSubtasks = (parsed.suggestedSubtasks || []).map(title => ({
@@ -330,8 +362,6 @@ exports.generateProductivityInsights = async (projectTasks, projectMembers = [])
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    
     const formattedTasks = projectTasks.map(t => {
       const assigneeName = t.assignedTo ? (t.assignedTo.name || t.assignedTo) : 'Unassigned';
       return `- Title: "${t.title}", Status: "${t.status}", Assigned To: "${assigneeName}", Hours: ${t.estimatedHours || 'N/A'}, Due: ${t.dueDate ? new Date(t.dueDate).toDateString() : 'None'}`;
@@ -367,8 +397,7 @@ exports.generateProductivityInsights = async (projectTasks, projectMembers = [])
       Return ONLY the raw JSON object, no markdown wrappers, no introductory comments.
     `;
 
-    const result = await model.generateContent(prompt);
-    const rawText = result.response.text();
+    const rawText = await generateContentWithFallback(prompt);
     return parseJsonResponse(rawText);
   } catch (error) {
     console.error('Gemini Insights Error:', error);
